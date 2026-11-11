@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="768" viewBox="0 0 768 768">
+  <title>Spoof</title>
+  <rect width="768" height="768" fill="#fff"/>
+  <defs>
+    <g id="quadrant" fill="#000">
+      <path d="M72 72H197V102H102V197H72Z"/>
+      <path d="M124 337L338 123V231L232 337Z"/>
+    </g>
+  </defs>
+  <use href="#quadrant"/>
+  <use href="#quadrant" transform="rotate(90 384 384)"/>
+  <use href="#quadrant" transform="rotate(180 384 384)"/>
+  <use href="#quadrant" transform="rotate(270 384 384)"/>
+  <circle cx="384" cy="384" r="48" fill="#000"/>
+</svg>

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Runtime state, logs and results
+.prime_cache/
+log/
+dist_gui/
+.gui_build/
+*.ckpt
+result.json
+desktop_settings.json
+engine_stderr.log
+*.log
+
+# Generated / build artifacts
+.runtime/build/
+.runtime/generated/
+*.o
+*.def
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
