@@ -1,104 +1,279 @@
-# Spoof 搜索
+# descartes-spoof
 
-搜索经典 Descartes/spoof 对象：C 为奇平方，m 为合数且 m≡1 (mod 4)，
-gcd(C,m)=1，σ(C)(m+1)=2Cm，D=Cm 小于指定上界。
-支持多进程搜索、自动素数上限、批次级断点续跑和离线多设备分片。
+`descartes-spoof` performs a bounded exact search for positive odd spoofs of the classical form. Given a numerical upper bound, it tests whether any solutions other than Descartes' example exist below that bound. The program enumerates the prime factorizations of the square part, solves the perfect number equation for the unique remaining factor, and uses mathematical pruning to eliminate impossible branches. It supports multiple worker processes, sharded execution, and checkpoint recovery. Results record hits, search status, and unresolved cases. The current implementation has completed an exhaustive search below `10^60` and found no solutions other than Descartes' example.
 
-## 启动与恢复
+A perfect number is a positive integer `N` satisfying `σ(N)=2N`, where `σ` denotes the sum of the positive divisors; for example, `σ(6)=1+2+3+6=12=2×6`. All known perfect numbers are even, and the existence of odd perfect numbers remains an open problem.
 
-在 PowerShell 中进入本目录：
+Descartes (1638) gave a famous example in which the composite number `22021` is treated as prime. For a prime `p`, we have `σ(p)=p+1`; treating a composite number `m` in the same way amounts to replacing `σ(m)` with `m+1`. The resulting number formally satisfies the perfect number equation, but is not an odd perfect number:
 
-```powershell
-.\start_search.ps1 -Bound ('1' + ('0' * 35)) -Workers 12 -Fresh
-.\start_search.ps1 -Bound ('1' + ('0' * 35)) -Workers 12 -Resume
+```math
+3^2\cdot7^2\cdot11^2\cdot13^2\cdot22021=198585576189,
+\qquad
+22021=19^2\cdot61.
 ```
 
-默认深度为 4、每批 16 个子树、检查点间隔 900 秒。上界必须是完整整数。
-PrimeCap 默认为 auto；NodeCap 默认为 none，无需手动估计这两个上限。
-`-Fresh` 清除当前任务的检查点并从头开始；`-Resume` 从最后有效检查点恢复。
-恢复时保持上界、切分深度、批大小和分片范围不变，Workers 可以改变。
-首次检查点之前中断需重新开始；检查点不保存正在执行的递归位置，在途批次会重算。
-同一检查点目录只允许一个协调进程使用。不同设备各自使用本地目录和同一份程序。
+Such objects are called spoofs (singular: spoof). Descartes' construction retains the prime factorization of the square part while treating the composite factor `m` as prime; the resulting number formally satisfies the perfect number equation but is not perfect. Any argument that remains valid when `m` is treated as prime also applies to a spoof. Spoofs can therefore be used to examine which arguments rely only on the formal equation.
 
-也可通过 `run.cmd` 使用完整命令行参数：
+Before the 2022 paper by the BYU Computational Number Theory Group, Descartes' example was the only known nontrivial positive odd spoof. Voight (2003) gave a generalized spoof with a negative base: `3^4·7^2·11^2·19^2·(-127)`. Banks et al. (2008) and Dittmer (2014) searched for positive odd spoofs of related forms, but found no additional examples beyond Descartes'. In particular, Dittmer proved that, under his definition, Descartes' example is the only spoof with fewer than seven distinct quasi-prime factors. BYU (2022) studied a broader definition allowing arbitrary integer bases, including negative bases. They gave even examples such as `3^1·4^1·5^1`, in which the composite base `4` is formally treated as prime. They also determined all 21 nontrivial, odd, primitive spoof perfect factorizations with fewer than seven bases.
+
+These studies focus on particular forms of factorization or on factorizations with a bounded number of bases. Tóth (2021, Theorem 1) established that, under his definition, every odd spoof perfect number other than Descartes' example has a non-pseudo-prime component greater than `10^12`. This result relies on an exhaustive computation of the relevant set up to that bound. In the notation used below, this is a lower bound on `C`, rather than on the full product `D=Cm`.
+
+This project exhaustively searches the classical form below a specified numerical bound on the full product `D=Cm`, without a separate parameter restricting the number of bases.
+
+## Mathematical background
+
+For a positive integer `n`, define
+
+```math
+\sigma(n)=\sum_{d\mid n}d,
+\qquad
+I(n)=\frac{\sigma(n)}{n}.
+```
+
+The quantity `I(n)` is called the abundancy index; a perfect number satisfies `I(N)=2`.
+
+Euler proved that if an odd perfect number exists, exactly one prime in its prime factorization has an odd exponent and all other exponents are even. Hence it can be written as
+
+```math
+N=q^\alpha r^2,
+\qquad
+\gcd(q,r)=1,
+\qquad
+q\equiv\alpha\equiv1\pmod 4,
+```
+
+where `q` is the special prime and `r` is a positive odd integer.
+
+Descartes' construction replaces `q` with a possibly composite number `m`, takes its exponent to be 1, denotes the square part by `C`, and requires
+
+```math
+\sigma(C)(m+1)=2Cm.
+```
+
+If `m` is prime, `m≡1 (mod 4)`, `C` is an odd square, and `gcd(C,m)=1`, this equation makes `Cm` an odd perfect number. If `m` is composite and the equation still holds, the result is a spoof. Since a composite `m` satisfies `σ(m)>m+1` and `gcd(C,m)=1`, we have `σ(Cm)=σ(C)σ(m)>2Cm`. Thus, a spoof is not a perfect number but an abundant number.
+
+## Search definition
+
+Given an upper bound `B`, the program searches for pairs of positive integers `(C,m)` satisfying:
+
+- `C` is an odd square;
+- `m` is composite and `m≡1 (mod 4)`;
+- `gcd(C,m)=1`;
+- `σ(C)(m+1)=2Cm`;
+- `D=Cm<B`.
+
+Solving `σ(C)(m+1)=2Cm` directly gives
+
+```math
+m=\frac{\sigma(C)}{2C-\sigma(C)}.
+```
+
+Thus, each `C` determines at most one `m`. The search enumerates `C` and requires `2C-\sigma(C)>0` and `2C-\sigma(C)\mid\sigma(C)`.
+
+The example above corresponds to the following program variables:
+
+```math
+C=3^2\cdot7^2\cdot11^2\cdot13^2,
+\qquad
+m=22021=19^2\cdot61,
+\qquad
+D=Cm=198585576189.
+```
+
+For `B=10^12`, the program finds and reports this solution.
+
+## Quick start
+
+### Running from source
+
+The source code is cross-platform. The repository includes a precompiled Windows x64 kernel for CPython 3.11; other platforms require building the corresponding native module. The instructions below use Windows.
+
+```text
+.runtime/compiled/descartes_search.cp311-win_amd64.pyd
+```
+
+Running from source requires CPython 3.11 and `python-flint`. Create an environment in the project directory:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install python-flint
+```
+
+Open the desktop interface:
+
+```powershell
+.\start_gui.cmd
+```
+
+Alternatively, use the command line:
 
 ```powershell
 .\run.cmd --help
-.\run.cmd --bound 1000000000000 --workers 2 --fresh
+.\run.cmd --bound 1000000000000 --workers 4 --fresh
 ```
 
-## 输出
+`--fresh` clears the corresponding checkpoints and starts the search from scratch. If a run is interrupted, resume it with the same bound and output directory:
 
-默认全部写入一个目录，例如上界 10^35 对应 `log/1e35/`：
+```powershell
+.\run.cmd --bound 1000000000000 --workers 4 --resume
+```
+
+If checkpoints already exist, you must specify either `--fresh` or `--resume`; these options are mutually exclusive. With `--resume`, the output directory and all search parameters except the worker count must match those of the checkpoint.
+
+A bound of `10^12` provides a demonstration that runs in seconds. Searches with bounds of `10^60` or higher may take days or longer on consumer hardware; do not use a large bound for your first trial run.
+
+The `10^12` run finds Descartes' example and prints output of the form:
 
 ```text
-log/1e35/
+HIT D=198585576189 q=9018009 m=22021 factors=((3, 2), (7, 2), (11, 2), (13, 2))
+```
+
+Here, `q` is the program's field name for the square part `C`.
+
+### Building the Windows x64 executable
+
+Install PyInstaller in `.venv`, then run:
+
+```powershell
+.\build_desktop.ps1
+```
+
+The build output is in `dist_gui/Spoof/`, which contains `Spoof.exe` and `SpoofEngine/`. Copy the entire directory. The build script accepts `-Python`, `-OutputDir`, and `-WorkDir`; the output directory must be empty. The icon comes from `assets/icon.ico`.
+
+## Search workflow
+
+### Search algorithm
+
+Each search node stores the square part selected so far, `A`, together with `S=σ(A)` and the largest prime factor selected so far. A depth-first search (DFS) enumerates prime factors in increasing order, considering their even powers. It prunes branches using necessary conditions derived from upper bounds on abundancy, divisibility constraints, and bounds on the remaining primes.
+
+For each candidate square part `C`, the program computes the corresponding `m` from `C` and `σ(C)` and requires it to be a positive integer. It then checks that `m` is composite, `m≡1 (mod 4)`, `gcd(C,m)=1`, and `Cm<B`. A hit is recorded if all checks pass.
+
+### Parallel execution
+
+The search nodes are grouped into batches according to the split depth and batch size. Each batch ID determines the shard to which the batch belongs, and the batches are processed in parallel by multiple worker processes. Idle workers take over subtrees and prime intervals that other workers have not yet searched, reusing the pruning results already computed at the parent node.
+
+Once all work in a batch is complete, its node count, hit records, and unresolved records are committed together. Checkpoints save progress at the granularity of complete batches.
+
+## Parameters
+
+Common parameters:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--bound` | `10^35` | Search bound; must be a full decimal integer |
+| `--workers` | `min(16, CPU count)` | Number of parallel worker processes |
+| `--output-dir` | `log/<bound>` | Directory for logs, results, and checkpoints |
+| `--fresh` | Off | Clear the corresponding checkpoints and restart; mutually exclusive with `--resume` |
+| `--resume` | Off | Resume from a matching checkpoint; mutually exclusive with `--fresh` |
+| `--shards` | 1 | Total number of logical shards |
+| `--owned` | All shards | Shards assigned to this machine, such as `0:1` or `0,2`; zero-based |
+
+Scheduling and tuning parameters:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--split-depth` | 4 | Depth at which the search frontier is split |
+| `--chunksize` | 16 | Number of subtrees per batch |
+| `--prime-cap` | `auto` | Upper limit on primes; `auto` is `max(3, floor(((B-1)/9)^(1/4)))` |
+| `--node-cap` | `none` | `none` means no node limit is imposed |
+| `--checkpoint-seconds` | 900 | Checkpoint interval |
+| `--assist-poll` | 1024 | Assistance polling interval |
+| `--no-assist` | Off | Disable dynamic load balancing for baseline comparisons |
+
+The native prime iterator uses 64-bit `primesieve`. At a bound of `10^78`, the `auto` prime cap is approximately `1.8257×10^19`, still below `2^64−1`. At `10^79`, it is approximately `3.2467×10^19`, exceeding `2^64−1`, so the program rejects the run before the search starts. Manually specifying a lower `--prime-cap` allows the run to start, but may leave unresolved branches, in which case the result is `INCOMPLETE`.
+
+## Output and recovery
+
+By default, output is written to `log/<bound>/`:
+
+```text
+log/1e60/
   run.log
   result.json
   A.ckpt
   B.ckpt
 ```
 
-A/B 检查点随保存次数交替产生。`run.log` 采用逐行 JSON，记录运行和进度。
-通过 `-OutputDir 'log/myrun'`（命令行 `--output-dir log/myrun`）指定其他目录；恢复时使用同一目录。
-同一上界的独立任务请指定不同目录，避免覆盖结果。
-离线分片以编号区分文件，例如负责分片 0–1 时为 `s0-1.log`、`s0-1.json`、`s0-1_A.ckpt`、`s0-1_B.ckpt`。
+- `run.log`: one JSON event per line, recording startup, progress, checkpoints, work splits for assistance, hits, and completion;
+- `result.json`: the authoritative result, including status, counters, batch counts, hit lines, and unresolved records.
 
-只有 COMPLETE 且所有 open_* 为零才表示指定范围已完整搜索。
-INCOMPLETE、ERROR 或 INTERRUPTED 不构成完整覆盖。日志中的临时 HIT 应以持久化结果为准。
-检查点采用 CRC32 检测文件损坏，A/B 文件交替保存；只接受格式和搜索参数匹配的检查点。
-结果与恢复参数不包含程序内容摘要，跨设备运行须由使用者保证程序一致。
-日志写入失败会警告，计算可继续；不要用日志替代检查点恢复。
+To guard against interrupted writes, checkpoints alternate between two files, A and B. Each write replaces the older file, while the other retains the previous complete state. During recovery, the program verifies the CRC32 checksum and the search parameters; if validation fails, recovery falls back to the other file.
 
-## 离线分片
+`HIT_FOUND` is written as soon as a solution is found and is included in the interface's `Hits found` count. `provisional=true` indicates that the hit may not yet have been saved in a checkpoint; the hit lines in `result.json` determine the final result. `Reported nodes` includes nodes from committed batches, frontier nodes, and nodes from fragments that have already returned within unfinished batches.
 
-例如固定为 4 个逻辑分片，两台设备分别执行：
+A complete search of the specified range requires `status == "COMPLETE"` and zero values for `open_factor`, `open_branch`, and `open_candidates`. If these conditions hold and the hit count is zero, there are no spoofs with composite `m` in that range.
+
+When resuming, keep the bound, prime cap, node cap, split depth, batch size, shard assignment, and output directory unchanged; the worker count may be changed. Batches that were in progress are recomputed in full, so an interruption may require repeating more than one checkpoint interval's worth of work. Each output directory should be used by only one coordinator process.
+
+## Desktop interface and shard merging
+
+Double-click `start_gui.cmd` to open the desktop interface. The interface reads the logs once per second. Closing the window leaves the search process running. Terminating a search stops its entire process tree; the next run can resume from a valid checkpoint.
+
+Offline shards are numbered starting at 0. For example, to distribute four shards across two machines:
 
 ```powershell
 .\start_search.ps1 -Bound ('1' + ('0' * 35)) -Shards 4 -Owned '0:1' -Workers 12 -Fresh
 .\start_search.ps1 -Bound ('1' + ('0' * 35)) -Shards 4 -Owned '2:3' -Workers 12 -Fresh
 ```
 
-在界面左侧点击 Merge results，添加各设备的结果 JSON。支持从不同目录分次添加，界面编号从 0 开始；无需导入日志或检查点。检查通过后点击 Merge and save，默认文件名为 `merged.json`。保存前会重新读取并检查输入，且不允许覆盖输入文件。
-
-使用命令行时，收集所有分片的结果 JSON 到单独目录，再执行：
+Use **Merge results** on the left side of the interface to add the result JSON files from each machine. Once validation passes, select **Merge and save**. From the command line, use:
 
 ```powershell
 .\merge_results.ps1 -InputDir collected_results -Output merged.json
 ```
 
-所有分片须使用同一程序及相同数学参数。局部分片完成不等于全局完成，必须合并全部且无重叠的分片。
-各设备的 Worker 数量和负责份数可以不同；搜索上界、素数上限、节点上限、切分深度、每批子树数量和总份数须相同。合并会检查结果格式、批次数、编号覆盖、完成状态、未决项及 HIT 计数；任一输入不符合要求时拒绝保存。
+The merge utility checks each result's search parameters, batch counts, completion status, unresolved cases, and HIT count. It also requires complete shard coverage with no overlapping shard IDs. Results that fail these checks are not written to a merged file.
 
-## 环境与编译
+## Building the kernel
 
-入口使用本目录 `.venv` 中的 CPython 3.11 和 python-flint，Windows x64 下加载
-`.runtime/compiled/descartes_search.cp311-win_amd64.pyd`，不回退到纯 Python 内核。
+The repository includes a precompiled `.pyd` module, so the program can be run directly. Rebuilding the kernel requires a toolchain with the following components:
+
+- `build_env/Scripts/python.exe` (with Cython and setuptools);
+- `w64devkit/bin`;
+- `build/primesieve/source/include`;
+- `build/primesieve/build/libprimesieve.a`.
 
 ```powershell
-.\build.ps1
-# 工具链位于其他目录时：
 .\build.ps1 -Toolchain 'D:\path\to\toolchain'
 ```
 
-工具链目录需包含 `build_env/Scripts/python.exe`（Cython、setuptools）、
-`w64devkit/bin`、`build/primesieve/source/include` 和 `build/primesieve/build/libprimesieve.a`。
-编译产物写入 `.runtime`。正在搜索时不要重新编译或替换运行代码。
+Alternatively, set `SPOOF_TOOLCHAIN` and run `.\build.ps1`. Build artifacts are written to `.runtime/compiled/`. Do not recompile or replace the running code while a search is in progress.
 
-HIT 发现后以 `HIT_FOUND` 事件及时记录，不在批次完成时重复输出。`provisional=true` 表示发现通知，不代表已写入检查点。正式结果仍由整批完成后提交；恢复重算可能再次报告同一解。GUI 日志随读取更新，Reported nodes 包含未完成批次中已回报的节点。恢复时从检查点中的节点数重新显示。
+## References
 
-## 桌面界面与动态负载均衡
+Banks, W. D., Güloğlu, A. M., Nevans, C. W., & Saidak, F. (2008). Descartes
+numbers. In J.-M. De Koninck, A. Granville, & F. Luca (Eds.), *Anatomy of integers*
+(CRM Proceedings & Lecture Notes, Vol. 46, pp. 167–173). American Mathematical Society.
+[https://doi.org/10.1090/crmp/046/12](https://doi.org/10.1090/crmp/046/12)
 
-双击 `start_gui.cmd` 打开桌面界面。GUI 每秒读取日志；关闭窗口不会停止独立搜索进程。界面的终止操作会停止搜索进程树，下次从有效检查点恢复。
+BYU Computational Number Theory Group. (2022). Odd, spoof perfect
+factorizations. *Journal of Number Theory, 234*, 31–47.
+[https://doi.org/10.1016/j.jnt.2021.07.028](https://doi.org/10.1016/j.jnt.2021.07.028)
 
-默认启用动态负载均衡：常规前沿任务派发完后，将尚未执行的 DFS 续段分配给空闲进程。未完成批次的续段不单独持久化，因此中断可能损失超过一个检查点周期的计算。可用 `run.cmd --bound 1000000000000 --workers 2 --no-assist --fresh` 关闭动态负载均衡。
+Descartes, R. (1638, November 15). Letter to Marin Mersenne [Letter]. In C. Adam
+& P. Tannery (Eds.), *Œuvres de Descartes* (1898 edition, Vol. 2, letter CXLIX,
+esp. pp. 429–430). Léopold Cerf.
+[Digitized text](https://fr.wikisource.org/wiki/Œuvres_de_Descartes/Édition_Adam_et_Tannery/Tome_2/Texte_entier)
 
-需要便携桌面程序时，先在 `.venv` 安装 PyInstaller，再运行 `build_desktop.ps1`。产物位于 `dist_gui/Spoof/`，须整体复制，不能单独复制 EXE。界面设置保存在 `desktop_settings.json`，运行关联信息保存在对应日志目录；这些文件不承担检查点恢复职责。
+Dittmer, S. J. (2014). Spoof odd perfect numbers. *Mathematics of Computation,
+83*(289), 2575–2582.
+[https://doi.org/10.1090/S0025-5718-2013-02793-7](https://doi.org/10.1090/S0025-5718-2013-02793-7)
 
-应用图标位于 `assets/icon.svg`（矢量原稿）和 `assets/icon.ico`（Windows 多尺寸图标）。桌面构建会将 ICO 嵌入 EXE 并配置窗口图标。`build_desktop.ps1` 可通过 `-Python`、`-OutputDir`、`-WorkDir` 指定构建环境、输出与临时目录。
+Tóth, L. (2021). On the density of spoof odd perfect numbers. *Computational
+Methods in Science and Technology, 27*(1), 25–28.
+[https://doi.org/10.12921/cmst.2021.0000005](https://doi.org/10.12921/cmst.2021.0000005)
 
-界面的分片编号从 0 开始：将搜索分成 4 份时，两台设备可分别填写 `0-1` 和 `2-3`。命令行 `--owned` 仍使用从 0 开始的编号，检查点参数不变。新搜索和恢复仅显示本次运行事件；查看历史日志会读取已有记录。清空显示不会删除磁盘日志。
+Voight, J. (2003). On the nonexistence of odd perfect numbers. In S. Katok,
+A. Sossinsky, & S. Tabachnikov (Eds.), *MASS Selecta: Teaching and Learning
+Advanced Undergraduate Mathematics* (pp. 293–300). American Mathematical Society.
+[Author's version](https://jvoight.github.io/articles/opn-mass-rev-060211.pdf)
 
-## License
+## License and author
 
-MIT License, Copyright (c) 2026 Chengyuan Tang. See LICENSE. Third-party components and distribution obligations are listed in THIRD_PARTY_NOTICES.md.
+MIT License. See [LICENSE](LICENSE).
+
+For third-party components and obligations associated with binary distribution, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md):
+primesieve (BSD-2), python-flint (MIT), FLINT/GMP/MPFR (LGPL), and the GCC Runtime
+Library Exception.
+
+Chengyuan Tang

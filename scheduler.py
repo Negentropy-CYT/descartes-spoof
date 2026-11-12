@@ -593,8 +593,12 @@ def main():
     exclusive.add_argument('--fresh', action='store_true')
     args = parser.parse_args()
     args.assist = not args.no_assist
-    if args.bound < 2 or min(args.workers, args.split_depth, args.chunksize, args.shards, args.checkpoint_seconds) < 1 or args.progress_seconds <= 0 or not 1 <= args.assist_poll <= 0xffffffff or args.assist_timeout <= 0:
-        parser.error('invalid search parameters')
+    if args.bound < 2:
+        parser.error('bound must be at least 2')
+    if min(args.workers, args.split_depth, args.chunksize, args.shards, args.checkpoint_seconds) < 1:
+        parser.error('workers, split-depth, chunksize, shards and checkpoint-seconds must be positive')
+    if args.progress_seconds <= 0 or not 1 <= args.assist_poll <= 0xffffffff or args.assist_timeout <= 0:
+        parser.error('invalid progress/assist parameters')
     if args.output_dir is None:
         digits = str(args.bound)
         label = '1e' + str(len(digits) - 1) if digits[0] == '1' and set(digits[1:]) == {'0'} else digits
