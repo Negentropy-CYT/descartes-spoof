@@ -241,32 +241,27 @@ Alternatively, set `SPOOF_TOOLCHAIN` and run `.\build.ps1`. Build artifacts are 
 
 ## References
 
-Banks, W. D., Güloğlu, A. M., Nevans, C. W., & Saidak, F. (2008). Descartes
-numbers. In J.-M. De Koninck, A. Granville, & F. Luca (Eds.), *Anatomy of integers*
-(CRM Proceedings & Lecture Notes, Vol. 46, pp. 167–173). American Mathematical Society.
-[https://doi.org/10.1090/crmp/046/12](https://doi.org/10.1090/crmp/046/12)
-
-BYU Computational Number Theory Group. (2022). Odd, spoof perfect
-factorizations. *Journal of Number Theory, 234*, 31–47.
-[https://doi.org/10.1016/j.jnt.2021.07.028](https://doi.org/10.1016/j.jnt.2021.07.028)
-
-Descartes, R. (1638, November 15). Letter to Marin Mersenne [Letter]. In C. Adam
-& P. Tannery (Eds.), *Œuvres de Descartes* (1898 edition, Vol. 2, letter CXLIX,
-esp. pp. 429–430). Léopold Cerf.
-[Digitized text](https://fr.wikisource.org/wiki/Œuvres_de_Descartes/Édition_Adam_et_Tannery/Tome_2/Texte_entier)
-
-Dittmer, S. J. (2014). Spoof odd perfect numbers. *Mathematics of Computation,
-83*(289), 2575–2582.
-[https://doi.org/10.1090/S0025-5718-2013-02793-7](https://doi.org/10.1090/S0025-5718-2013-02793-7)
-
-Tóth, L. (2021). On the density of spoof odd perfect numbers. *Computational
-Methods in Science and Technology, 27*(1), 25–28.
-[https://doi.org/10.12921/cmst.2021.0000005](https://doi.org/10.12921/cmst.2021.0000005)
-
-Voight, J. (2003). On the nonexistence of odd perfect numbers. In S. Katok,
-A. Sossinsky, & S. Tabachnikov (Eds.), *MASS Selecta: Teaching and Learning
-Advanced Undergraduate Mathematics* (pp. 293–300). American Mathematical Society.
-[Author's version](https://jvoight.github.io/articles/opn-mass-rev-060211.pdf)
+- Banks, W. D., Güloğlu, A. M., Nevans, C. W., & Saidak, F. (2008). Descartes
+  numbers. In J.-M. De Koninck, A. Granville, & F. Luca (Eds.), *Anatomy of integers*
+  (CRM Proceedings & Lecture Notes, Vol. 46, pp. 167–173). American Mathematical Society.
+  [https://doi.org/10.1090/crmp/046/12](https://doi.org/10.1090/crmp/046/12)
+- BYU Computational Number Theory Group. (2022). Odd, spoof perfect
+  factorizations. *Journal of Number Theory, 234*, 31–47.
+  [https://doi.org/10.1016/j.jnt.2021.07.028](https://doi.org/10.1016/j.jnt.2021.07.028)
+- Descartes, R. (1638, November 15). Letter to Marin Mersenne [Letter]. In C. Adam
+  & P. Tannery (Eds.), *Œuvres de Descartes* (1898 edition, Vol. 2, letter CXLIX,
+  esp. pp. 429–430). Léopold Cerf.
+  [Digitized text](https://fr.wikisource.org/wiki/Œuvres_de_Descartes/Édition_Adam_et_Tannery/Tome_2/Texte_entier)
+- Dittmer, S. J. (2014). Spoof odd perfect numbers. *Mathematics of Computation,
+  83*(289), 2575–2582.
+  [https://doi.org/10.1090/S0025-5718-2013-02793-7](https://doi.org/10.1090/S0025-5718-2013-02793-7)
+- Tóth, L. (2021). On the density of spoof odd perfect numbers. *Computational
+  Methods in Science and Technology, 27*(1), 25–28.
+  [https://doi.org/10.12921/cmst.2021.0000005](https://doi.org/10.12921/cmst.2021.0000005)
+- Voight, J. (2003). On the nonexistence of odd perfect numbers. In S. Katok,
+  A. Sossinsky, & S. Tabachnikov (Eds.), *MASS Selecta: Teaching and Learning
+  Advanced Undergraduate Mathematics* (pp. 293–300). American Mathematical Society.
+  [Author's version](https://jvoight.github.io/articles/opn-mass-rev-060211.pdf)
 
 ## License and author
 
