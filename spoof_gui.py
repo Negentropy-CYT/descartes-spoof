@@ -14,6 +14,7 @@ import signal
 import socket
 import subprocess
 import sys
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
@@ -653,7 +654,13 @@ class App(tk.Tk):
                                         capture_output=True, timeout=15, check=False,
                                         creationflags=subprocess.CREATE_NO_WINDOW)
                 if result.returncode != 0:
-                    raise OSError(result.stderr.decode(errors='replace') or 'taskkill failed')
+                    encoding = f'cp{ctypes.windll.kernel32.GetOEMCP()}'
+                    detail = result.stderr.decode(encoding, errors='replace').strip()
+                    # taskkill also reports children that exited while the tree
+                    # was being enumerated. The stop succeeded if the root is gone.
+                    time.sleep(0.2)
+                    if active_pid(record):
+                        raise OSError(detail or 'taskkill failed')
             else:
                 os.killpg(pid, signal.SIGKILL)
             self.status.set('Stop requested · Resume is available')
