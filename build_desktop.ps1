@@ -91,6 +91,11 @@ $prefix = [IO.Path]::GetFullPath($dist).TrimEnd('\') + '\'
 if (!$engineDir.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or !$destination.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Build path escapes output directory.' }
 Move-Item -LiteralPath $engineDir -Destination $destination
 
+# Upstream test assets are not part of the application runtime.
+$flintTests = Join-Path $guiDir 'SpoofEngine\_internal\flint\test'
+if (Test-Path -LiteralPath $flintTests) { Remove-Item -LiteralPath $flintTests -Recurse -Force }
+Get-ChildItem -LiteralPath (Join-Path $guiDir '_internal') -Recurse -File -Filter 'tcltest-*.tm' -ErrorAction SilentlyContinue | Remove-Item -Force
+
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LICENSE') -Destination $guiDir -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD_PARTY_NOTICES.md') -Destination $guiDir -Force
 Copy-Item -LiteralPath $licenseRoot -Destination (Join-Path $guiDir 'licenses') -Recurse -Force
