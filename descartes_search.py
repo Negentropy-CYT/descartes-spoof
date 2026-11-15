@@ -248,6 +248,8 @@ class Search:
     open_candidates = cython.declare(object, visibility="public")
     hits = cython.declare(object, visibility="public")
     stopped = cython.declare(cython.bint, visibility="public")
+    # Optional per-worker depth slot. It is instrumentation only.
+    depth_slot = cython.declare(cython.int[::1], visibility="public")
     # Optional idle-worker assistance. It does not alter any mathematical test.
     assist_check = cython.declare(object, visibility="public")
     assist_tick = cython.declare(cython.uint, visibility="public")
@@ -261,6 +263,7 @@ class Search:
             table_cap = min(prime_cap, PRIME_TABLE_CAP)
             primes = prime_view(array("I", odd_primes(table_cap)))
         self.primes = primes
+        self.depth_slot = array("i", [-1])
         self.nodes = 0
         self.open_factor = 0
         self.unresolved = []
@@ -326,6 +329,8 @@ class Search:
         if self.nodes >= self.node_cap:
             self.stopped = True
             return
+        depth: cython.int = len(cython.cast(tuple, factors))
+        self.depth_slot[0] = depth
         self.nodes += 1
         t = 2 * a - c
         if t <= 0:  # sigma(q)/q increases under every extension
@@ -510,6 +515,7 @@ class Search:
                                 a * pp, c * sp, p,
                                 factors + ((p, 2 * e),), next_sigma, sp
                             )
+                            self.depth_slot[0] = depth
                         if self.stopped:
                             return
                         sp = p2 * sp + p + 1
@@ -542,6 +548,8 @@ class Search:
         next_prime: uint64_t
         supplier_ready: cython.bint = False
         a, c, last, factors, sigma_factors, new_sigma = node
+        depth: cython.int = len(cython.cast(tuple, factors))
+        self.depth_slot[0] = depth
         if start_p > stop_p:
             return
         try:
@@ -602,11 +610,13 @@ class Search:
                         try:
                             self.visit(*child)
                         except SearchYield as y:
+                            self.depth_slot[0] = depth
                             y.remaining.extend(self._split_remaining(
                                 node, limit, numerator, denominator, selected,
                                 remaining_selected, next_sigma, p, e + 1,
                                 stop_p))
                             raise
+                        self.depth_slot[0] = depth
                     if self.stopped:
                         return
                     sp = p2 * sp + p + 1

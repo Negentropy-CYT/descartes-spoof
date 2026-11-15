@@ -189,12 +189,14 @@ By default, output is written to `log/<bound>/`:
 ```text
 log/1e60/
   run.log
+  run.depth.log
   result.json
   A.ckpt
   B.ckpt
 ```
 
 - `run.log`: one JSON event per line, recording startup, progress, checkpoints, work splits for assistance, hits, and completion;
+- `run.depth.log`: per-progress samples of each worker's current selected-prime depth; this is instrumentation only and is not used for recovery;
 - `result.json`: the authoritative result, including status, counters, batch counts, hit lines, and unresolved records.
 
 To guard against interrupted writes, checkpoints alternate between two files, A and B. Each write replaces the older file, while the other retains the previous complete state. During recovery, the program verifies the CRC32 checksum and the search parameters; if validation fails, recovery falls back to the other file.
@@ -208,6 +210,8 @@ When resuming, keep the bound, prime cap, node cap, split depth, batch size, sha
 ## Desktop interface and shard merging
 
 Double-click `start_gui.cmd` to open the desktop interface. The interface reads the logs once per second. Closing the window leaves the search process running. Terminating a search stops its entire process tree; the next run can resume from a valid checkpoint.
+
+The **Depth** card shows the minimum and maximum selected-prime depth reported by the workers at the latest progress sample. Each worker keeps its last reading between tasks; a worker that has not reported yet is omitted from the range. Per-worker samples are written to `run.depth.log`.
 
 Offline shards are numbered starting at 0. For example, to distribute four shards across two machines:
 

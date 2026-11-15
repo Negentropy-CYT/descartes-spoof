@@ -312,6 +312,7 @@ class App(tk.Tk):
         self.directory = tk.StringVar(value='')
         self.status = tk.StringVar(value='Not connected')
         self.metrics = {key: tk.StringVar(value='—') for key in ('nodes', 'hits', 'batches')}
+        self.depth_limits = [tk.StringVar(value='—') for _ in range(2)]
         self.log_source = tk.StringVar(value='No run selected')
 
         self.configure(background='#eef2f7')
@@ -406,12 +407,19 @@ class App(tk.Tk):
         ttk.Label(status_box, textvariable=self.status, style='Section.TLabel', wraplength=580).pack(anchor='w')
         cards = tk.Frame(right, background='#eef2f7')
         cards.grid(row=1, column=0, sticky='ew', pady=(0, 12))
-        for index, (key, label) in enumerate([('nodes', 'Reported nodes'), ('hits', 'Hits found'), ('batches', 'Completed batches')]):
+        for index, (key, label) in enumerate([('nodes', 'Reported nodes'), ('depth', 'Depth'), ('hits', 'Hits found'), ('batches', 'Completed batches')]):
             cards.columnconfigure(index, weight=1, uniform='metric')
-            card = ttk.Frame(cards, padding=(16, 12))
-            card.grid(row=0, column=index, sticky='ew', padx=(0 if index == 0 else 6, 0 if index == 2 else 6))
+            card = ttk.Frame(cards, padding=(12, 12))
+            card.grid(row=0, column=index, sticky='ew', padx=(0 if index == 0 else 4, 0 if index == 3 else 4))
             ttk.Label(card, text=label, style='Muted.TLabel').pack(anchor='w')
-            ttk.Label(card, textvariable=self.metrics[key], style='Value.TLabel').pack(anchor='w', pady=(4, 0))
+            if key == 'depth':
+                row = ttk.Frame(card)
+                row.pack(anchor='w', pady=(4, 0))
+                for sublabel, value in zip(('Min', 'Max'), self.depth_limits):
+                    ttk.Label(row, text=sublabel, style='Muted.TLabel').pack(side='left')
+                    ttk.Label(row, textvariable=value, style='Value.TLabel').pack(side='left', padx=(2, 3))
+            else:
+                ttk.Label(card, textvariable=self.metrics[key], style='Value.TLabel').pack(anchor='w', pady=(4, 0))
         events = ttk.Frame(right, padding=16)
         events.grid(row=2, column=0, sticky='nsew')
         events.columnconfigure(0, weight=1)
@@ -484,6 +492,10 @@ class App(tk.Tk):
                 self.metrics[key].set(f'{value:,}' if isinstance(value, int) else str(value))
         if batches is not None:
             self.metrics['batches'].set(f'{batches:,}' if isinstance(batches, int) else str(batches))
+
+    def _show_depth(self, limits=None):
+        for field, value in zip(self.depth_limits, limits or ('—', '—')):
+            field.set(value)
 
     def _load_preferences(self):
         try:
@@ -560,6 +572,7 @@ class App(tk.Tk):
         self._clear_events()
         for metric in self.metrics.values():
             metric.set('—')
+        self._show_depth()
         self.tail.select(log_filename(cfg), offset=offset)
         self.log_source.set('{v0} · {v1}'.format(v0='History' if offset is None else 'Current run', v1=log_filename(cfg)))
 
@@ -696,9 +709,11 @@ class App(tk.Tk):
                 for line, record in self.tail.poll():
                     self._line(line, record)
                     if record and record.get('event') in ('START', 'RESUME'):
+                        self._show_depth()
                         counts = record['checkpoint_counters']
                         self._update_metrics(counts, record['checkpoint_done'])
                     elif record and record.get('event') == 'PROGRESS':
+                        self._show_depth(record.get('depth'))
                         self._update_metrics({'nodes': record.get('nodes', 0),
                                               'hits': record.get('hits', 0)},
                                              record.get('batches_done'))
@@ -706,6 +721,7 @@ class App(tk.Tk):
                         if 'hits' in record:
                             self._update_metrics({'hits': record['hits']})
                     elif record and record.get('event') == 'FINISH':
+                        self._show_depth()
                         self._update_metrics(record.get('counters', {}), record.get('completed_batches'))
                         self.status.set('Search finished · {v0}'.format(v0=record.get('status', '?')))
             if self.proc is not None and self.proc.poll() is not None and not str(self.status.get()).startswith('Search finished'):

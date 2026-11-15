@@ -29,6 +29,8 @@ class RunLog:
         self.console = sys.stdout  # stable during redirect_stdout in frontier generation
         self._file = None
         self._warned = False
+        self._depth_started = False
+        self._depth_failed = False
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             # Append: never truncate or read existing bytes, including broken log lines.
@@ -69,6 +71,21 @@ class RunLog:
             self._file.flush()  # No fsync: logs do not carry durable search state.
         except Exception as error:
             self._file_failed(error)
+
+    def write_depths(self, depths):
+        if self._depth_failed:
+            return
+        try:
+            record = dict(time_utc=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                          session_id=self.session, depths=depths)
+            with self.path.with_suffix('.depth.log').open('a', encoding='utf-8') as output:
+                if not self._depth_started:
+                    output.write('\n')  # Separate sessions even after a truncated write.
+                output.write(json.dumps(record, separators=(',', ':')) + '\n')
+            self._depth_started = True
+        except OSError as error:
+            self._depth_failed = True
+            self._console(f'LOG_WARNING depth logging unavailable ({type(error).__name__})')
 
     def close(self):
         if self._file is not None:

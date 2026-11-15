@@ -278,9 +278,13 @@ def _run_search(args, owned, owner_tag, log):
         nodes = state['counters']['nodes'] + root_nodes + partial_nodes
         hits = len(hit_lines)
         elapsed = round(now - began, 3)
+        depths = [d if d >= 0 else None for d in pool.depths[::base.DEPTH_STRIDE]]
+        active = [d for d in depths if d is not None]
+        log.write_depths(depths)
         log.emit('PROGRESS',
                  f'PROGRESS nodes={nodes} hits={hits} batches_done={state["done_count"]} '
                  f'batches_created={local_batch} elapsed_seconds={elapsed}',
+                 depth=[min(active), max(active)] if active else None,
                  nodes=nodes, hits=hits, batches_done=state['done_count'],
                  batches_created=local_batch, global_batches_created=global_batch,
                  pending_batches=len({v[0] for v in pending.values()}),

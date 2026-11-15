@@ -19,6 +19,7 @@ import descartes_search as core
 COUNTERS = ("nodes", "hits", "open_factor", "open_branch", "open_candidates")
 _prime_file = _prime_map = _primes = None
 _parameters = None
+DEPTH_STRIDE = 16  # 64 bytes between worker-written 32-bit integers.
 
 def default_workers():
     if not hasattr(os, "sched_getaffinity"):
@@ -114,8 +115,10 @@ class _HitTee(io.StringIO):
         return len(text)
 
 
-def search_batch(tasks, should_yield=None, assist_poll=1024, notify_hit=None):
+def search_batch(tasks, should_yield=None, assist_poll=1024, notify_hit=None, depth_slot=None):
     search = core.Search(*_parameters, _primes)
+    if depth_slot is not None:
+        search.depth_slot = depth_slot
     if should_yield is not None:
         search.assist_check = should_yield
         search.assist_poll = assist_poll
@@ -155,13 +158,15 @@ def search_batch(tasks, should_yield=None, assist_poll=1024, notify_hit=None):
 
 
 def search_worker(sock, path, parameters, request_token, assist_poll, assist_enabled,
-                  notify_hits):
+                  notify_hits, depths, worker_id):
     with Connection(sock.detach()) as connection:
         try:
             initialize_worker(path, parameters)
         except Exception as error:
             connection.send(error)
             return
+        offset = worker_id * DEPTH_STRIDE
+        slot = memoryview(depths).cast("B").cast("i")[offset:offset + 1]
         connection.send(None)
 
         def should_yield():
@@ -182,7 +187,7 @@ def search_worker(sock, path, parameters, request_token, assist_poll, assist_ena
             try:
                 result = search_batch(message[1],
                                       should_yield if assist_enabled else None,
-                                      assist_poll, notify_hit if notify_hits else None)
+                                      assist_poll, notify_hit if notify_hits else None, slot)
             except Exception as error:
                 connection.send(error)
                 return
@@ -198,7 +203,9 @@ class WorkerPool:
         self.request_tokens = {}
         self.connection_processes = {}
         try:
-            for _ in range(workers):
+            self.depths = context.RawArray("i", workers * DEPTH_STRIDE)
+            for worker_id in range(workers):
+                self.depths[worker_id * DEPTH_STRIDE] = -1
                 parent, child = socket.socketpair()
                 with parent, child:
                     for sock in (parent, child):
@@ -211,7 +218,7 @@ class WorkerPool:
                     process = context.Process(
                         target=search_worker,
                         args=(child, path, parameters, token, assist_poll,
-                              assist_enabled, notify_hits)
+                              assist_enabled, notify_hits, self.depths, worker_id)
                     )
                     self.processes.append(process)
                     self.connection_processes[connection] = process
