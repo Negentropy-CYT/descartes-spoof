@@ -340,7 +340,7 @@ class Search:
         # of selected primes in c must fit in a, and c/gcd(a,c) divides r*m.
         selected = gcd(a, c)
         required = c // selected
-        if gcd(required, a) != 1 or a * required >= self.bound:
+        if a * required >= self.bound or (selected != 1 and gcd(required, selected) != 1):
             return
         # gcd(m+1,A) must fit the selected-prime exponent budget left by c.
         remaining_selected = a // selected
