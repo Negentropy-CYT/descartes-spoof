@@ -526,13 +526,14 @@ class Search:
                     primesieve_free_iterator(cython.address(supplier))
             return
         self.scan_children(
-            (a, c, last, factors, sigma_factors, new_sigma),
+            a, c, last, factors, sigma_factors, new_sigma,
             limit, numerator, denominator, selected, remaining_selected,
             next_sigma, last + 1, 1, min(self.cap, isqrt(isqrt(limit)))
         )
 
     @cython.ccall
-    def scan_children(self, node, limit, numerator, denominator,
+    def scan_children(self, a, c, last, factors, sigma_factors, new_sigma,
+                      limit, numerator, denominator,
                       selected, remaining_selected, next_sigma,
                       start_p, start_e, stop_p):
         """Resume *only* descendant enumeration; node-local effects are done.
@@ -547,7 +548,6 @@ class Search:
         supplier: primesieve_iterator
         next_prime: uint64_t
         supplier_ready: cython.bint = False
-        a, c, last, factors, sigma_factors, new_sigma = node
         depth: cython.int = len(cython.cast(tuple, factors))
         self.depth_slot[0] = depth
         if start_p > stop_p:
@@ -581,7 +581,8 @@ class Search:
                 # recurse (the heavy path is candidate scanning itself).
                 if self._should_yield():
                     remainder = self._split_remaining(
-                        node, limit, numerator, denominator, selected,
+                        (a, c, last, factors, sigma_factors, new_sigma),
+                        limit, numerator, denominator, selected,
                         remaining_selected, next_sigma, p,
                         start_e if p == start_p else 1, stop_p)
                     if len(remainder) >= 2:
@@ -598,21 +599,26 @@ class Search:
                     sp = (pow(p, 2 * e + 1) - 1) // (p - 1)
                 while pp * p_next_sq <= limit:
                     if selected == 1 or remaining_selected % gcd(sp, a) == 0:
-                        child = (a * pp, c * sp, p,
-                                 factors + ((p, 2 * e),), next_sigma, sp)
                         if self._should_yield():
                             rest = self._split_remaining(
-                                node, limit, numerator, denominator, selected,
+                                (a, c, last, factors, sigma_factors, new_sigma),
+                                limit, numerator, denominator, selected,
                                 remaining_selected, next_sigma, p, e + 1,
                                 stop_p)
                             if rest:
+                                child = (a * pp, c * sp, p,
+                                         factors + ((p, 2 * e),), next_sigma, sp)
                                 raise SearchYield([('T', child)] + rest)
                         try:
-                            self.visit(*child)
+                            self.visit(
+                                a * pp, c * sp, p,
+                                factors + ((p, 2 * e),), next_sigma, sp
+                            )
                         except SearchYield as y:
                             self.depth_slot[0] = depth
                             y.remaining.extend(self._split_remaining(
-                                node, limit, numerator, denominator, selected,
+                                (a, c, last, factors, sigma_factors, new_sigma),
+                                limit, numerator, denominator, selected,
                                 remaining_selected, next_sigma, p, e + 1,
                                 stop_p))
                             raise
@@ -626,8 +632,9 @@ class Search:
             if cython.compiled and supplier_ready:
                 primesieve_free_iterator(cython.address(supplier))
 
-    @cython.ccall
-    def _should_yield(self):
+    @cython.cfunc
+    @cython.inline
+    def _should_yield(self) -> cython.bint:
         if self.assist_check is None:
             return False
         self.assist_tick += 1
@@ -667,7 +674,9 @@ class Search:
             raise ValueError('invalid search continuation')
         (_, node, limit, numerator, denominator, selected,
          remaining_selected, next_sigma, start_p, start_e, stop_p) = task
-        self.scan_children(node, limit, numerator, denominator, selected,
+        a, c, last, factors, sigma_factors, new_sigma = node
+        self.scan_children(a, c, last, factors, sigma_factors, new_sigma,
+                           limit, numerator, denominator, selected,
                            remaining_selected, next_sigma,
                            start_p, start_e, stop_p)
 
