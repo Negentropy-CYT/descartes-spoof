@@ -10,7 +10,6 @@ import contextlib
 import json
 import multiprocessing as mp
 import os
-from math import isqrt
 from pathlib import Path
 import select
 import time
@@ -30,13 +29,23 @@ PYTHON_AUTO_SIEVE_LIMIT = 10_000_000
 
 
 def automatic_prime_cap(bound):
-    """Cover every recursively extensible prime without an arbitrary cutoff.
+    """Bound recursive primes by the integer fifth root of bound - 1.
 
-    In the search core, possible(p, limit, ...) requires p**4 <= limit,
-    and every call has limit <= (bound - 1)//(minimum_m*a) <= (bound-1)//9.
-    The separate terminal-candidate paths do not depend on prime_cap.
+    With at least three remaining slots, possible(x) requires x**6 < bound.
+    With two slots, d = 2*A*M - sigma(A)*(M+1) is a positive multiple of
+    four and possible(x) implies d < 4*A*M/x. Thus x < A*M, and the square
+    budget gives x**5 < A*M*x**4 < bound. Final primes are solved separately.
     """
-    return max(3, isqrt(isqrt((bound - 1) // 9)))
+    magnitude = bound - 1
+    lower = 0
+    upper = 1 << ((magnitude.bit_length() + 4) // 5)
+    while upper - lower > 1:
+        middle = (lower + upper) // 2
+        if middle**5 <= magnitude:
+            lower = middle
+        else:
+            upper = middle
+    return max(3, lower)
 
 
 def resolve_caps(args):

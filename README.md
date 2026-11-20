@@ -174,13 +174,13 @@ Scheduling and tuning parameters:
 |---|---|---|
 | `--split-depth` | 4 | Depth at which the search frontier is split |
 | `--chunksize` | 16 | Number of subtrees per batch |
-| `--prime-cap` | `auto` | Upper limit on primes; `auto` is `max(3, floor(((B-1)/9)^(1/4)))` |
+| `--prime-cap` | `auto` | Upper limit on recursive primes. `auto` uses `max(3, floor((B-1)^(1/5)))`. |
 | `--node-cap` | `none` | `none` means no node limit is imposed |
 | `--checkpoint-seconds` | 900 | Checkpoint interval |
 | `--assist-poll` | 1024 | Assistance polling interval |
 | `--no-assist` | Off | Disable dynamic load balancing for baseline comparisons |
 
-The native prime iterator uses 64-bit `primesieve`. At a bound of `10^78`, the `auto` prime cap is approximately `1.8257×10^19`, still below `2^64−1`. At `10^79`, it is approximately `3.2467×10^19`, exceeding `2^64−1`, so the program rejects the run before the search starts. Manually specifying a lower `--prime-cap` allows the run to start, but may leave unresolved branches, in which case the result is `INCOMPLETE`.
+The native 64-bit `primesieve` iterator requires the prime cap to be less than `2^64-1`. With `auto`, the largest full-product bound accepted at startup is `B = (2^64-1)^5`. At `B = 10^96`, the `auto` prime cap is approximately `1.5849×10^19`, below the limit. At `B = 10^97`, it is approximately `2.5119×10^19`, which exceeds the limit, so the program rejects the run before the search starts. A lower manual `--prime-cap` may leave unresolved branches, in which case the result is `INCOMPLETE`.
 
 ## Output and recovery
 

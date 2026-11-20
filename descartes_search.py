@@ -340,8 +340,19 @@ class Search:
         # of selected primes in c must fit in a, and c/gcd(a,c) divides r*m.
         selected = gcd(a, c)
         required = c // selected
-        if a * required >= self.bound or (selected != 1 and gcd(required, selected) != 1):
+        lcm_prefix = a * required
+        if lcm_prefix >= self.bound or (selected != 1 and gcd(required, selected) != 1):
             return
+        if (sigma_factors is not None and factors and factors[-1][1] == 2
+                and lcm_prefix * (last + 2) >= self.bound):
+            # In any strict extension, each later prime r must satisfy r^2 | c:
+            # lcm(A,c) divides D, but D/lcm(A,c) < last+2 <= r and r does not divide A.
+            # Its square exceeds last^2+last+1, so r also divides the parent sigma.
+            for parent_prime in sigma_factors:
+                if parent_prime > last and c % (parent_prime * parent_prime) == 0:
+                    break
+            else:
+                return
         # gcd(m+1,A) must fit the selected-prime exponent budget left by c.
         remaining_selected = a // selected
 
@@ -474,10 +485,13 @@ class Search:
         # I(final)>=2*M/(M+1). This exact integer test is necessary.
         if possible(max(self.cap + 1, last + 2), limit, numerator, denominator):
             self.open_branch += 1
+        # A child with p <= floor(c/t) already has sigma(A*p^2) >= 2*A*p^2.
+        # Later powers only increase abundancy. Terminal tests above remain separate.
+        first_child = max(last, k) + 1
         # Preserve the original native hot path when assistance is explicitly
         # disabled. No continuation tuple, helper calls, or IPC polling.
         if self.assist_check is None:
-            prime_index = bisect_right(self.primes, last)
+            prime_index = bisect_left(self.primes, first_child)
             try:
                 while True:
                     if prime_index < prime_count:
@@ -487,7 +501,7 @@ class Search:
                         if not cython.compiled:
                             break
                         if not supplier_ready:
-                            start = max(3, last + 1, PRIME_TABLE_CAP + 1)
+                            start = max(3, first_child, PRIME_TABLE_CAP + 1)
                             if start > self.cap or not possible(
                                 start, limit, numerator, denominator
                             ):
@@ -528,7 +542,7 @@ class Search:
         self.scan_children(
             a, c, last, factors, sigma_factors, new_sigma,
             limit, numerator, denominator, selected, remaining_selected,
-            next_sigma, last + 1, 1, min(self.cap, isqrt(isqrt(limit)))
+            next_sigma, first_child, 1, min(self.cap, isqrt(isqrt(limit)))
         )
 
     @cython.ccall
