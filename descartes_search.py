@@ -359,6 +359,9 @@ class Search:
         primes = self.primes
         prime_count = len(primes)
         k = c // t
+        # A new prime p <= k makes sigma(A*p^2) > 2*A*p^2.
+        # Higher powers and later factors only increase abundancy.
+        first_child = max(last, k) + 1
         minimum_m = max(9, 4 * ((k + 3) // 4) + 1)
         # gcd(m,A)=1 and m is composite. Its prime factors are all at
         # least the first odd prime not dividing A, so m >= that prime^2.
@@ -372,7 +375,7 @@ class Search:
         # Factor the newest sigma component before using its forced divisors.
         limit = (self.bound - 1) // minimum_m // a
         max_p = isqrt(limit)
-        if max_p <= last:
+        if max_p < first_child:
             return
         # Reuse complete parent factors of sigma(A), factoring only the new
         # prime-power component. Fall back to the whole sigma when unresolved.
@@ -411,12 +414,12 @@ class Search:
         # Proven factors stay reusable even when larger than the prime table.
         next_sigma = sigma_primes if rem == 1 else None
         obligations = square_obligations(a, c, sigma_primes)
-        # A known prime q <= last absent from A cannot enter Q later.
+        # A known prime q < first_child absent from A cannot enter Q later.
         # sigma(A) divides sigma(Q), so q^v_q(C) must divide m.
         forced = 1
         if sigma_primes is not None:
             for q in sigma_primes:
-                if q > last:
+                if q >= first_child:
                     break
                 if a % q:
                     residual = c
@@ -447,7 +450,7 @@ class Search:
                 self.bound, a, minimum_m, forced, obligations
             )
             max_p = isqrt(limit)
-            if max_p < 3 or max_p <= last:
+            if max_p < 3 or max_p < first_child:
                 return
             if factor_index < 0 or sigma_primes[factor_index] <= max_p:
                 break
@@ -485,9 +488,6 @@ class Search:
         # I(final)>=2*M/(M+1). This exact integer test is necessary.
         if possible(max(self.cap + 1, last + 2), limit, numerator, denominator):
             self.open_branch += 1
-        # A child with p <= floor(c/t) already has sigma(A*p^2) >= 2*A*p^2.
-        # Later powers only increase abundancy. Terminal tests above remain separate.
-        first_child = max(last, k) + 1
         # Preserve the original native hot path when assistance is explicitly
         # disabled. No continuation tuple, helper calls, or IPC polling.
         if self.assist_check is None:
